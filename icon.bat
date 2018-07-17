@@ -1,0 +1,1 @@
+lhspicc -e"hsptmp.exe" -i"icon.ico"

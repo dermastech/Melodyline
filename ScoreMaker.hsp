@@ -1,0 +1,813 @@
+#include "winmm.as"
+#module
+#global
+#include "p2b.as"
+
+win0width = 640: win0height = 480: win1width = 640: win1height = 480;ウィンドウの大きさ
+
+;サブ画面:進行確認用ウィンドウ
+screen 1, win1width, win1height, 2, win0width+1, 0
+title "譜面作成.info"
+pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"
+pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"
+pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"
+pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"
+pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"
+pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"
+pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"
+pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"
+pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"
+pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"
+pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"
+pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"
+pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"
+pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"
+pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"
+pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"
+gsel 1, 1
+
+;メイン画面:操作するウィンドウ
+screen 0, win0width, win0height, 2, 0, 0
+title "譜面作成.main"
+objnumber = 0;(クリアするオブジェクト数-1)を保持
+;ボックスに表示される初期値
+titlename = "タイトル"
+artist = "作曲者"
+sec = 0
+BPMint = 120
+;音楽再生ストップ("戻る"が押されたときのため)
+mci "stop mel"
+mci "seek mel to 0"
+;win0clear
+redraw 0
+clrobj 0, objnumber
+color 255, 255, 255
+boxf 0, 0, win0width, win0height
+color
+texttitle = "custom1"
+exist "resource\\custom\\SCORE\\custom1.txt"
+if(strsize != -1){
+	texttitle = "custom2"
+	exist "resource\\custom\\SCORE\\custom2.txt"
+	if(strsize != -1){
+		dialog "カスタム曲がいっぱいです。\n既存の譜面を削除して新しい譜面を作りますか?", 2
+		}
+		else{goto *check0}
+	}
+	else{goto *check0}
+if(stat = 7){
+	end
+	}
+if(stat = 6){
+	;win0clear
+		redraw 0
+		clrobj 0, objnumber
+		color 255, 255, 255
+		boxf 0, 0, win0width, win0height
+		color
+		objnumber = 1
+		;メッセージ、リストボックス、ボタンたち
+		pos 25, 25
+		mes "どちらの譜面を削除しますか?"
+		objsize 124, 48
+		pos 25, 50
+		button "custom1", *delete1;リストを再取得してリストボックスを再表示
+		button "custom2", *delete2
+		redraw
+		gsel 0, 1
+		stop
+	}
+*delete1
+	delete "resource\\custom\\SCORE\\custom1.txt"
+	goto *check0
+*delete2
+	delete "resource\\custom\\SCORE\\custom2.txt"
+	texttitle = "custom2"
+	goto *check0
+	
+
+;楽曲選択画面
+*check0
+	;音楽再生ストップ("戻る"が押されたときのため)
+	mci "stop mel"
+	mci "seek mel to 0"
+	;win0clear
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 2
+	;メッセージ、リストボックス、ボタンたち
+	pos 25, 25
+	mes "resource\\custom\\MUSICフォルダに.mp3形式の音楽ファイルを入れてください。"
+	mes "譜面を作成する楽曲を選択してください"
+	sdim list, 256
+	dirlist list, "resource\\custom\\MUSIC\\*.mp3", 1;MUSICフォルダの.mp3ファイルのリスト取得
+	pos 25, 75
+	objsize 600
+	selindex=0:listbox selindex, 300, list;リストボックス表示
+	objsize
+	pos 25, 440
+	button "更新", *check0;リストを再取得してリストボックスを再表示
+	pos 550, 440
+	button "次へ", *check1
+	redraw
+	gsel 0, 1
+	
+	stop
+
+;楽曲確認画面
+*check1
+	;win0clear
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 3
+	;selfileにファイル名を代入
+	notesel list
+	sdim selfile, 256
+	noteget selfile, selindex
+	;メッセージ、ボタンたち
+	pos 25, 25
+	mes selfile+" でよろしいですか？"
+	pos 25, 50
+	objsize 124, 48
+	button "PLAY", *sound_play1
+	button "STOP", *sound_stop1
+	objsize
+	pos 550, 440
+	button "次へ", *check2
+	pos 25, 440
+	button "戻る", *check0
+	redraw
+	gsel 0, 1
+	;音楽ファイルの読み込み
+	mci "close mel";"戻る"が押されたときのための初期化
+	mci "open \"resource\\custom\\MUSIC\\"+selfile+"\" alias mel"
+	;if(stat = -1){dialog "ファイルを開けません": end}
+	mci "set mel time format ms"
+	mci "status mel length";再生時間取得
+	mellen = stat
+	
+	stop
+
+;音楽ファイルの再生
+*sound_play1
+	mci "play mel"
+	;再生が終了したらsound_stop1処理
+	repeat
+	await 1
+	mci "status mel position"
+	tmp = stat
+	if (tmp = mellen): {break} 
+	loop
+
+;音楽ファイルの再生停止、再生位置を頭に戻す
+*sound_stop1
+	mci "stop mel"
+	mci "seek mel to 0"
+
+	stop
+
+;タイトル、作曲者入力画面
+*check2
+	;音楽再生ストップ
+	mci "stop mel"
+	mci "seek mel to 0"
+	;win1更新
+	gsel 1
+	color 255, 255, 255
+	boxf 0, 0, win1width, win1height
+	color
+	pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"+selfile
+	pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"
+	pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"
+	pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"
+	pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"
+	pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"
+	pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"
+	pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"
+	pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"
+	pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"
+	pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"
+	pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"
+	pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"
+	pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"
+	pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"
+	pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"
+	gsel 1, 1
+	;win0clear
+	gsel 0
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 3
+	
+	;playtime = "再生時間"
+	;メッセージ、ボックス、ボタンたち
+	pos 25, 25
+	mes "タイトル、作曲者を入力してください"
+	pos 25, 50
+	mes "タイトル" 
+	pos 150, 50
+	input titlename, 100, 16;タイトル入力ボックス
+	pos 25, 75
+	mes "作曲者"
+	pos 150, 75
+	input artist, 100, 16;作曲者入力ボックス
+	pos 25, 100
+	mes "再生時間"
+	pos 150, 100
+	playtime = str(mellen/60000)+":"+str(mellen\60000/1000);再生時間m:s表記
+	mes playtime
+	pos 550, 440
+	button "次へ", *check3
+	pos 25, 440
+	button "戻る", *check1
+	redraw
+	gsel 0, 1
+	
+	stop
+
+;遅延時間設定画面
+*check3
+	mci "stop mel"
+	;win1更新
+	gsel 1
+	color 255, 255, 255
+	boxf 0, 0, win1width, win1height
+	color
+	pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"+selfile
+	pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"+titlename
+	pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"+artist
+	pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"+playtime
+	pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"
+	pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"
+	pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"
+	pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"
+	pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"
+	pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"
+	pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"
+	pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"
+	pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"
+	pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"
+	pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"
+	pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"
+	gsel 1, 1
+	;win0clear
+	gsel 0
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 5
+	;メッセージ、ボックス、ボタンたち
+	pos 25, 25
+	mes "譜面の再生位置を調整します。"
+	mes "\"PLAY\"ボタンを押した瞬間に曲の第一小節が始まるように調節してください。"
+	mes "\(\"PLAY\"ボタンを連打するとわかりやすいかも\)"
+	pos 25, 100
+	mes "遅延時間"
+	pos 150, 100
+	input sec, 40, 16;遅延時間入力ボックス
+	pos 25, 125
+	objsize 124, 48
+	button "PLAY", *sound_play2
+	button "STOP", *sound_stop2
+	objsize
+	pos 550, 400
+	button "遅延なし", *check4_1
+	pos 550, 440
+	button "次へ", *check4_2
+	pos 25, 440
+	button "戻る", *check2
+	redraw
+	gsel 0, 1
+	
+	stop
+
+;音楽ファイルの再生
+*sound_play2
+	mci "play mel from "+sec
+	;再生位置(時間)、入力した遅延時間表示
+	repeat
+	await 1
+	mci "status mel position"
+	tmp = stat
+	redraw 0
+	color 255, 255, 255: boxf 25, 125, win0width, win0height:color
+	pos 25, 225
+	mes tmp;再生位置(時間)表示
+	pos 25, 250
+	mes sec;入力した遅延時間表示
+	redraw
+	if tmp = mellen:{break};再生時間を終えたら停止
+	loop
+	
+	stop
+
+;音楽ファイルの再生停止
+*sound_stop2
+	mci "stop mel"
+
+	stop
+	
+;遅延なしの時
+*check4_1
+	sec = 0: goto *check4;sec=0で次へ
+	
+;遅延ありの時
+*check4_2
+	if (sec <= 0){
+		mci "stop mel"
+		dialog "遅延時間は半角数字で入力してください\n(小数点以下は読み込まれません)"
+		goto *check3
+		};secが数値(0より大きい)でないときは戻る
+	;goto *check4
+	
+;BPM設定画面
+*check4
+	;音楽再生ストップ
+	mci "stop mel"
+	mci "seek mel to 0"
+	;win1更新
+	gsel 1
+	color 255, 255, 255
+	boxf 0, 0, win1width, win1height
+	color
+	pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"+selfile
+	pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"+titlename
+	pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"+artist
+	pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"+playtime
+	pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"+sec
+	pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"
+	pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"
+	pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"
+	pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"
+	pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"
+	pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"
+	pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"
+	pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"
+	pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"
+	pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"
+	pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"
+	gsel 1, 1
+	;win0clear
+	gsel 0
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 4
+	;メッセージ、ボックス、ボタンたち
+	pos 25, 25
+	mes "曲に合わせてBPMを入力してください。"
+	pos 25, 50
+	mes "BPM"
+	pos 150, 50
+	input BPMint, 30, 16;BPM入力ボックス
+	pos 25, 125
+	objsize 124, 48
+	button "PLAY", *sound_play3
+	button "STOP", *sound_stop3
+	objsize
+	pos 550, 440
+	button "次へ", *check5
+	pos 25, 440
+	button "戻る", *check3
+	redraw
+	gsel 0, 1
+	
+;"poSE.wav"が存在しないときに戻る
+*re_check4
+	
+	stop
+	
+;音楽ファイルの再生
+*sound_play3
+	exist "resource\\original\\system\\tap.wav"
+	;"poSE.wav"が存在しないときダイアログ表示
+	if(strsize = -1){
+		dialog "ファイル\npoSE1.wav\nをresource\\original\\systemフォルダに入れてください。"
+		goto *re_check4
+		}
+		
+	mmload "resource\\original\\system\\tap.wav", 1, 0;tap音のロード
+	mci "set mel speed 1000"
+	mci "play mel from "+sec;音楽再生
+	quarter = 0;quarter番目の四分音符
+	
+	repeat
+	await 1
+	mci "status mel position"
+	tmp = stat-sec;楽譜の始まりでtmp=0
+	redraw 0
+	color 255, 255, 255: boxf 25, 100, win0width,win0height:color
+	pos 25, 225
+	mes tmp;再生位置(時間)表示
+	redraw
+	if (tmp*BPMint >= quarter*60000){;四分音符毎にtap音を鳴らす
+		mmplay 1: quarter = quarter+1
+		}
+	if tmp==mellen: {break};再生時間を終えたらsound_stop3処理へ
+	loop
+	
+;音楽ファイルの再生停止
+*sound_stop3
+	mci "stop mel"
+
+	stop
+	
+;楽譜作成画面
+*check5
+	if (BPMint <= 0){
+		mci "stop mel"
+		dialog "BPMは半角数字で入力してください\n(小数点以下は読み込まれません)"
+		goto *check4
+		};BPMが数値でないときは戻る
+	;音楽再生ストップ
+	mci "stop mel"
+	mci "seek mel to 0"
+	;win1更新
+	gsel 1
+	color 255, 255, 255
+	boxf 0, 0, win1width, win1height
+	color
+	pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"+selfile
+	pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"+titlename
+	pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"+artist
+	pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"+playtime
+	pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"+sec
+	pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"+BPMint
+	pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"
+	pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"
+	pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"
+	pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"
+	pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"
+	pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"
+	pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"
+	pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"
+	pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"
+	pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"
+	gsel 1, 1
+	;win0clear
+	gsel 0
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 6
+	;メッセージ、ボックス、ボタンたち
+	pos 25, 25
+	mes "曲に合わせてキーを押してください"
+	pos 250, 50
+	objsize 124, 48
+	button "PLAY", *sound_play4_1
+	button "STOP", *sound_stop4
+	mes "再生スピード"
+	mes "(1000=1倍速)"
+	speed = 1000
+	input speed, 40, 16
+	pos 250, 380
+	button "RESET", *check5
+	objsize
+	pos 550, 440
+	button "次へ", *check6
+	pos 25, 440
+	button "戻る", *check4
+	pos 400, 50
+			;sdim notesprev, 2048
+	sdim notes, 2048
+			;mesbox notesprev, 200, 400, 0
+	mesbox notes, 200, 380, 0;実際に表示するメッセージボックス(編集不可)
+	redraw
+	gsel 0, 1
+	;譜面関連の初期値
+	qq = 1;qq番目の十六分音符
+	phrase = 1;phrase番目の小節
+	string = "";再生している小節の譜面1行分(随時更新)
+	
+	stop
+	
+;音楽ファイルの再生、譜面作成
+*sound_play4_1
+	;ボックス再生成
+	clrobj 6, 6
+	pos 400,50
+	mesbox notes, 200, 380, 0
+	nflag = 0: mflag = 0: fflag = 0;その十六分音符中にキーが押されたかどうか
+	;音楽再生
+	mci "set mel speed "+speed
+	mci "play mel from 0"
+	timeGetTime: start = stat;再生開始時刻取得
+	;譜面作成
+	repeat
+	await 1
+	timeGetTime
+	tmp = (stat-start)*speed/1000-sec;譜面の始まりでtmp=0
+	redraw 0
+	color 255, 255, 255: boxf 25, 50, 250, win0height: boxf 250, 190, win0width, win0height: color
+	pos 250, 220
+	mes tmp;再生位置(時間)表示
+	mes start
+	key=0: stick key, 2034
+	;拍の瞬間からプラスマイナス三十二分音符までその拍として入力受付
+	if (qq*15000-22500 < tmp*BPMint & tmp*BPMint <= qq*15000-7500){
+		if(key & 1){nflag = 1};左が押されたらnflagフラグを立てる
+		if(key & 8){mflag = 2};下が押されたらmflagフラグを立てる
+		if(key & 4){fflag = 4};右が押されたらfflagフラグを立てる
+	};それを過ぎたら次の拍へ
+	if(tmp*BPMint > qq*15000-7500){
+	string = string + str(nflag+mflag+fflag): nflag=0: mflag=0: fflag=0;stringにノート追加、フラグ初期化
+		;一小節毎にnotesとメッセージボックスに反映、stringを初期化、次のphraseへ
+		if (strlen (string) = 16){
+					;notestring = str(phrase)+"\t"+ string
+					;notesel notesprev: noteadd notestring: notestring=""
+			notesel notes: noteadd string: objprm 6, notes: string="": phrase = phrase+1
+			}
+		qq = qq +1;次のqqへ
+	}
+	;string、notes表示
+	pos 25, 100
+	mes string
+	pos 25, 130
+	mes notes
+	redraw
+	if tmp = mellen:{break};再生時間を終えたらsound_stop4処理
+	loop
+
+;音楽ファイルの再生停止
+*sound_stop4
+	mci "stop mel"
+	;再生後は編集できるようにする
+	clrobj 6, 6
+	pos 400, 50
+	;mesbox notesprev, 200, 400, 1
+	mesbox notes, 200, 380, 1
+	
+	stop
+
+;.txtファイルが既に存在するかどうかの確認
+*check6
+	;音楽再生ストップ
+	mci "stop mel"
+	
+	goto *check7
+	
+	stop
+	
+;.txtファイル作成、確認画面
+*check7
+	;プレビュー用ウィンドウ
+	screen 3, 1000, 500, 2, win0width+1, 0
+	;win1更新
+	gsel 1
+	color 255, 255, 255
+	boxf 0, 0, win1width, win1height
+	color
+	pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"+selfile
+	pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"+titlename
+	pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"+artist
+	pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"+playtime
+	pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"+sec
+	pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"+BPMint
+	pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"
+	pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"
+	pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"
+	pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"
+	pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"
+	pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"
+	pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"
+	pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"
+	pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"
+	pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"
+	gsel 1, 1
+	;win0clear
+	gsel 0
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 13
+	redraw
+	;メッセージ、ボックス、ボタンたち
+	sdim notelist, 256
+	sdim noteSElist, 256
+	sdim backgroundlist, 256
+	sdim windowlist, 256
+	sdim boardlist, 256
+	dirlist notenlist, "resource\\original\\NOTE\\*na.png", 1;NOTEフォルダのnノーツファイルのリスト取得
+	dirlist notemlist, "resource\\original\\NOTE\\*ma.png", 1;NOTEフォルダのmノーツファイルのリスト取得
+	dirlist noteflist, "resource\\original\\NOTE\\*fa.png", 1;NOTEフォルダのfノーツファイルのリスト取得
+	dirlist noteSElist, "resource\\original\\SE\\*2.wav", 1;SEフォルダの.wavファイルのリスト取得
+	dirlist backgroundnlist, "resource\\original\\BACKGROUND\\*n.png", 1;BACKGROUNDフォルダのn背景ファイルのリスト取得
+	dirlist backgroundmlist, "resource\\original\\BACKGROUND\\*m.png", 1;BACKGROUNDフォルダのm背景ファイルのリスト取
+	dirlist backgroundflist, "resource\\original\\BACKGROUND\\*f.png", 1;BACKGROUNDフォルダのf背景ファイルのリスト取
+	dirlist windowlist, "resource\\original\\WINDOW\\*.png", 1;MUSICフォルダの.mp3ファイルのリスト取得
+	dirlist boardlist, "resource\\original\\BOARD\\*.png", 1;MUSICフォルダの.mp3ファイルのリスト取得
+	notenselindex=0:notemselindex=0:notefselindex=0
+	notenSEselindex=0:notemSEselindex=0:notefSEselindex=0
+	backgroundnselindex=0:backgroundmselindex=0:backgroundfselindex=0
+	windowselindex=0:boardselindex=0
+	pos 25, 25
+	mes "ノーツ、SE、背景、窓枠を選択してください"
+	objsize 100
+	pos 25,50
+	mes "note_n"
+	listbox notenselindex, 50, notenlist;リストボックス表示
+	mes "note_n_SE"
+	listbox notenSEselindex, 50, noteSElist;リストボックス表示
+	mes "背景_n"
+	listbox backgroundnselindex, 50, backgroundnlist;リストボックス表示
+	pos 125, 50
+	mes "note_m"
+	listbox notemselindex, 50, notemlist;リストボックス表示
+	mes "note_m_SE"
+	listbox notemSEselindex, 50, noteSElist;リストボックス表示
+	mes "背景_m"
+	listbox backgroundmselindex, 50, backgroundmlist;リストボックス表示
+	pos 225, 50
+	mes "note_f"
+	listbox notefselindex, 50, noteflist;リストボックス表示
+	mes "note_f_SE"
+	listbox notefSEselindex, 50, noteSElist;リストボックス表示
+	mes "背景_f"
+	listbox backgroundfselindex, 50, backgroundflist;リストボックス表示
+	pos 25, 325
+	mes "窓枠"
+	listbox windowselindex, 50, windowlist;リストボックス表示
+	pos 125, 325
+	mes "看板"
+	listbox boardselindex, 50, boardlist;リストボックス表示
+	objsize 124, 48
+	pos 400, 50
+	button "プレビュー", *preview
+	objsize
+	pos 550, 440
+	button "次へ", *check8
+	pos 25, 440
+	button "戻る", *check5
+	stop
+	
+;プレビュー用ウィンドウ表示・更新
+*preview
+	sdim noten, 256
+	sdim notem, 256
+	sdim notef, 256
+	sdim notenSE, 256
+	sdim notemSE, 256
+	sdim notefSE, 256
+	sdim backgroundn, 256
+	sdim backgroundm, 256
+	sdim backgroundf, 256
+	sdim window, 256
+	sdim board, 256
+	;ノーツの画像をロード
+	notesel notenlist
+	noteget noten, notenselindex: buffer 11:pngload "resource\\original\\NOTE\\"+noten
+	notesel notemlist
+	noteget notem, notemselindex: buffer 12:pngload "resource\\original\\NOTE\\"+notem
+	notesel noteflist
+	noteget notef, notefselindex: buffer 13:pngload "resource\\original\\NOTE\\"+notef
+	;ノーツのSEをロード
+	notesel noteSElist
+	noteget notenSE, notenSEselindex: mmload "resource\\original\\SE\\"+notenSE,1,0
+	noteget notemSE, notemSEselindex: mmload "resource\\original\\SE\\"+notemSE,2,0
+	noteget notefSE, notefSEselindex: mmload "resource\\original\\SE\\"+notefSE,3,0
+	;背景をロード
+	notesel backgroundnlist
+	noteget backgroundn, backgroundnselindex: buffer 14:pngload "resource\\original\\BACKGROUND\\"+backgroundn
+	notesel backgroundmlist
+	noteget backgroundm, backgroundmselindex: buffer 15:pngload "resource\\original\\BACKGROUND\\"+backgroundm
+	notesel backgroundflist
+	noteget backgroundf, backgroundfselindex: buffer 16:pngload "resource\\original\\BACKGROUND\\"+backgroundf
+	;看板をロード
+	notesel boardlist
+	noteget board, boardselindex: buffer 17:pngload "resource\\original\\BOARD\\"+board
+	;窓枠をロード
+	notesel windowlist
+	noteget window, windowselindex: buffer 18:pngload "resource\\original\\WINDOW\\"+window
+	;描画処理
+	redraw 0
+	gsel 3
+	gmode 7, 1000, 200
+	pos 0, 0: gcopy 16, 0, 0
+	gmode 7, 1000, 175
+	pos 0, 175: gcopy 15, 0, 0
+	pos 0, 325: gcopy 14, 0, 0
+	gmode 7, 100, 100
+	pos 800, 80: gcopy 13, 0, 0
+	pos 750, 200: gcopy 12, 0, 0
+	pos 700, 350: gcopy 11, 0, 0
+	gmode 7,600,480
+	pos 80,50: gcopy 17, 0, 0
+	gmode 7, 1000, 500
+	pos 0, 0: gcopy 18, 0, 0
+	size=40
+	if strlen(titlename)>20:size=30
+	font "ＭＳ ゴシック",size,1
+	color 0,0,0
+	pos 180, 120:mes titlename
+	font "ＭＳ ゴシック",40,1
+	pos 180,180:mes "作曲者:"+artist
+	pos 280,310:mes "到着まで  "+playtime
+	redraw
+	gsel 3, 2
+	;音を鳴らす
+	repeat
+	key=0: stick key, 2034
+	if(key & 1){mmplay 1};左が押されたらnotenSEを鳴らす
+	if(key & 8){mmplay 2};下が押されたらnotemSEを鳴らす
+	if(key & 4){mmplay 3};右が押されたらnotefSEを鳴らす
+	;ウィンドウが閉じられた時
+	onexit *exit
+	await 1
+	loop
+	
+	stop
+	
+;プレビュー用ウィンドウが閉じられた時の処理
+*exit
+	if(wparam = 3):{gsel wparam, -1}
+	else{end}
+	stop
+
+;確認画面	
+*check8
+	;プレビュー用ウィンドウを閉じる
+	gsel 3, -1
+	notesel notenlist:noteget noten, notenselindex
+	notesel notemlist:noteget notem, notemselindex
+	notesel noteflist:noteget notef, notefselindex
+	notesel noteSElist:noteget notenSE, notenSEselindex
+	noteget notemSE, notemSEselindex:noteget notefSE, notefSEselindex
+	notesel backgroundnlist:noteget backgroundn, backgroundnselindex
+	notesel backgroundmlist:noteget backgroundm, backgroundmselindex
+	notesel backgroundflist:noteget backgroundf, backgroundfselindex
+	notesel boardlist:noteget board, boardselindex
+	notesel windowlist:noteget window, windowselindex
+	;win1更新
+	gsel 1
+	color 255, 255, 255
+	boxf 0, 0, win1width, win1height
+	color
+	pos 25, 25: mes "再生ファイル": pos 200, 25: mes "―＞"+selfile
+	pos 25, 50: mes "タイトル": pos 200, 50: mes "―＞"+titlename
+	pos 25, 75: mes "作曲者": pos 200, 75: mes "―＞"+artist
+	pos 25, 100: mes "再生時間": pos 200, 100: mes "―＞"+playtime
+	pos 25, 125: mes "遅延時間": pos 200, 125: mes "―＞"+sec
+	pos 25, 150: mes "BPM": pos 200, 150: mes "―＞"+BPMint
+	pos 25, 175: mes "note_n": pos 200, 175: mes "―＞"+noten
+	pos 25, 200: mes "note_n_SE": pos 200, 200: mes "―＞"+notenSE
+	pos 25, 225: mes "背景_n": pos 200, 225: mes "―＞"+backgroundn
+	pos 25, 250: mes "note_m": pos 200, 250: mes "―＞"+notem
+	pos 25, 275: mes "note_m_SE": pos 200, 275: mes "―＞"+notemSE
+	pos 25, 300: mes "背景_m": pos 200, 300: mes "―＞"+backgroundm
+	pos 25, 325: mes "note_f": pos 200, 325: mes "―＞"+notef
+	pos 25, 350: mes "note_f_SE": pos 200, 350: mes "―＞"+notefSE
+	pos 25, 375: mes "背景_f": pos 200, 375: mes "―＞"+backgroundf
+	pos 25, 400: mes "窓枠": pos 200, 400: mes "―＞"+window
+	pos 280, 440: mes "\"完了!\""
+	gsel 1, 1
+	;win0clear
+	gsel 0
+	redraw 0
+	clrobj 0, objnumber
+	color 255, 255, 255
+	boxf 0, 0, win0width, win0height
+	color
+	objnumber = 0
+	redraw
+	;メッセージ、ボタンたち
+	pos 25, 25
+	mes "resource\\custom\\SCOREフォルダに"
+	pos 100, 50
+	mes ""+texttitle+".txt"
+	pos 25, 75
+	mes "が作成されていることを確認してください。"
+	pos 280, 200
+	button "完了!", *ending;"完了!"ボタンが押されたら閉じる
+	gsel 0, 1
+	;.txtファイルをSCOREフォルダに保存
+	split notenSE,"2.wav",nn:nn=nn+".wav"
+	split notemSE,"2.wav",mm:mm=mm+".wav"
+	split notefSE,"2.wav",ff:ff=ff+".wav"
+	the_note = titlename+","+artist+","+playtime+",8,"+str(BPMint)+","+str(sec)+","+selfile+","+noten+","+notem+","+notef+","+nn+","+mm+","+ff+","+backgroundn+","+backgroundm+","+backgroundf+","+board+","+window+"\n"+notes
+	notesel the_note
+	notesave "resource\\custom\\SCORE\\"+texttitle+".txt"
+	
+	stop
+	
+*ending
+	mci　"close mel"
+	end;完了!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! !!!!
+	
